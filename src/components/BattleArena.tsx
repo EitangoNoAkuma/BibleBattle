@@ -1,20 +1,20 @@
-import { useReducer, useCallback, useEffect, useState } from 'react';
-import type { GameState, PlayedVerse, Theme } from '../lib/types';
+import { useReducer, useCallback, useEffect, useState, useMemo } from 'react';
+import type { GameState, PlayedVerse } from '../lib/types';
 import { gameReducer, initialGameState } from '../lib/gameReducer';
-import { lookupVerse } from '../lib/bible';
-import { scoreVerse } from '../lib/scoring';
 import { aiSelectVerse } from '../lib/ai-opponent';
-import { generateCommentary } from '../lib/commentary';
 import { themes } from '../data/themes';
+import { generateVerseChoices } from '../lib/verse-choices';
+import type { VerseChoice } from '../lib/verse-choices';
+import { fetchLLMScore, fetchLLMCommentary } from '../lib/api';
 import TitleScreen from './TitleScreen';
 import ThemeReveal from './ThemeReveal';
 import ScoreBoard from './ScoreBoard';
-import VerseInput from './VerseInput';
+import VerseChoices from './VerseChoices';
 import VerseCard from './VerseCard';
 import Commentary from './Commentary';
 import FinalResult from './FinalResult';
 
-function pickRandomTheme(usedThemeIds: Set<string>): Theme {
+function pickRandomTheme(usedThemeIds: Set<string>) {
   const available = themes.filter(t => !usedThemeIds.has(t.id));
   if (available.length === 0) return themes[Math.floor(Math.random() * themes.length)];
   return available[Math.floor(Math.random() * available.length)];
@@ -23,85 +23,165 @@ function pickRandomTheme(usedThemeIds: Set<string>): Theme {
 export default function BattleArena() {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [usedThemeIds, setUsedThemeIds] = useState<Set<string>>(new Set());
-  const [allCommentary, setAllCommentary] = useState<string[]>([]);
-  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [verseChoices, setVerseChoices] = useState<VerseChoice[]>([]);
+  const [scoreReason, setScoreReason] = useState('');
 
   const currentRound = state.rounds[state.rounds.length - 1] ?? null;
+
+  // Generate verse choices when it's the player's turn
+  useEffect(() => {
+    if (state.phase === 'player-turn' && state.theme) {
+      const choices = generateVerseChoices(state.theme, state.usedVerseIds);
+      setVerseChoices(choices);
+    }
+  }, [state.phase, state.theme, state.currentRound]);
 
   const handleStart = useCallback((difficulty: GameState['difficulty']) => {
     dispatch({ type: 'START_GAME', difficulty });
     const theme = pickRandomTheme(new Set());
     setUsedThemeIds(new Set([theme.id]));
-    setAllCommentary([]);
     dispatch({ type: 'REVEAL_THEME', theme });
   }, []);
 
-  const handlePlayerSubmit = useCallback((input: string) => {
-    const result = lookupVerse(input);
-    if (!result || !state.theme) return;
+  const handlePlayerSelect = useCallback(async (choice: VerseChoice) => {
+    if (!state.theme || isProcessing) return;
+    setIsProcessing(true);
 
-    const score = scoreVerse(result.verse, state.theme);
-    const played: PlayedVerse = {
-      verse: result.verse,
-      bookName: result.bookName,
-      score,
-      reference: result.reference,
-    };
+    try {
+      // LLM scoring
+      const scoreResult = await fetchLLMScore(
+        choice.verse.t,
+        choice.reference,
+        state.theme.name,
+        state.theme.description,
+      );
 
-    dispatch({ type: 'PLAYER_SUBMIT', verse: played });
+      setScoreReason(scoreResult.reason);
 
-    // Generate commentary for player's verse
-    const commentary = generateCommentary({
-      player: 'Player',
-      verse: played,
-      theme: state.theme,
-      playerTotal: state.playerScore + score,
-      aiTotal: state.aiScore,
-      round: state.currentRound,
-      totalRounds: state.totalRounds,
-    });
-    commentary.forEach(text => dispatch({ type: 'ADD_COMMENTARY', text }));
-    setAllCommentary(prev => [...prev, ...commentary]);
-  }, [state.theme, state.playerScore, state.aiScore, state.currentRound, state.totalRounds]);
+      const played: PlayedVerse = {
+        verse: choice.verse,
+        bookName: choice.bookName,
+        score: scoreResult.score,
+        reference: choice.reference,
+      };
 
-  // AI turn
+      dispatch({ type: 'PLAYER_SUBMIT', verse: played });
+
+      // LLM commentary
+      const commentaryResult = await fetchLLMCommentary({
+        player: 'Player',
+        verseReference: choice.reference,
+        verseText: choice.verse.t,
+        score: scoreResult.score,
+        scoreReason: scoreResult.reason,
+        themeName: state.theme.name,
+        themeDescription: state.theme.description,
+        playerTotal: state.playerScore + scoreResult.score,
+        aiTotal: state.aiScore,
+        round: state.currentRound,
+        totalRounds: state.totalRounds,
+        isSecondPlayer: false,
+      });
+
+      commentaryResult.lines.forEach(text =>
+        dispatch({ type: 'ADD_COMMENTARY', text })
+      );
+    } catch (err) {
+      console.error('Player turn error:', err);
+      // Fallback: use keyword score
+      const played: PlayedVerse = {
+        verse: choice.verse,
+        bookName: choice.bookName,
+        score: choice.keywordScore,
+        reference: choice.reference,
+      };
+      dispatch({ type: 'PLAYER_SUBMIT', verse: played });
+      dispatch({ type: 'ADD_COMMENTARY', text: `Player cites ${choice.reference}!` });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [state.theme, state.playerScore, state.aiScore, state.currentRound, state.totalRounds, isProcessing]);
+
+  // AI turn — select verse, then LLM score + commentary
   useEffect(() => {
     if (state.phase !== 'ai-turn' || !state.theme) return;
 
-    setIsAiThinking(true);
-    const timer = setTimeout(() => {
+    let cancelled = false;
+    setIsProcessing(true);
+
+    const runAiTurn = async () => {
+      // Small delay for drama
+      await new Promise(r => setTimeout(r, 1000));
+      if (cancelled) return;
+
       const aiResult = aiSelectVerse(state.theme!, state);
-      if (!aiResult) {
-        setIsAiThinking(false);
+      if (!aiResult || cancelled) {
+        setIsProcessing(false);
         return;
       }
 
-      const played: PlayedVerse = {
-        verse: aiResult.verse,
-        bookName: aiResult.bookName,
-        score: aiResult.score,
-        reference: aiResult.reference,
-      };
+      try {
+        // LLM scoring for AI's verse too
+        const scoreResult = await fetchLLMScore(
+          aiResult.verse.t,
+          aiResult.reference,
+          state.theme!.name,
+          state.theme!.description,
+        );
 
-      dispatch({ type: 'AI_SUBMIT', verse: played });
+        if (cancelled) return;
 
-      // Generate commentary for AI's verse
-      const commentary = generateCommentary({
-        player: 'AI Pastor',
-        verse: played,
-        theme: state.theme!,
-        playerTotal: state.playerScore,
-        aiTotal: state.aiScore + aiResult.score,
-        round: state.currentRound,
-        totalRounds: state.totalRounds,
-        opponentVerse: currentRound?.playerVerse,
-      });
-      commentary.forEach(text => dispatch({ type: 'ADD_COMMENTARY', text }));
-      setAllCommentary(prev => [...prev, ...commentary]);
-      setIsAiThinking(false);
-    }, 1500 + Math.random() * 1000);
+        const played: PlayedVerse = {
+          verse: aiResult.verse,
+          bookName: aiResult.bookName,
+          score: scoreResult.score,
+          reference: aiResult.reference,
+        };
 
-    return () => clearTimeout(timer);
+        dispatch({ type: 'AI_SUBMIT', verse: played });
+
+        // LLM commentary
+        const commentaryResult = await fetchLLMCommentary({
+          player: 'AI Pastor',
+          verseReference: aiResult.reference,
+          verseText: aiResult.verse.t,
+          score: scoreResult.score,
+          scoreReason: scoreResult.reason,
+          themeName: state.theme!.name,
+          themeDescription: state.theme!.description,
+          playerTotal: state.playerScore,
+          aiTotal: state.aiScore + scoreResult.score,
+          round: state.currentRound,
+          totalRounds: state.totalRounds,
+          isSecondPlayer: true,
+        });
+
+        if (!cancelled) {
+          commentaryResult.lines.forEach(text =>
+            dispatch({ type: 'ADD_COMMENTARY', text })
+          );
+        }
+      } catch (err) {
+        console.error('AI turn error:', err);
+        if (!cancelled) {
+          // Fallback: use keyword score
+          const played: PlayedVerse = {
+            verse: aiResult.verse,
+            bookName: aiResult.bookName,
+            score: aiResult.score,
+            reference: aiResult.reference,
+          };
+          dispatch({ type: 'AI_SUBMIT', verse: played });
+          dispatch({ type: 'ADD_COMMENTARY', text: `AI Pastor responds with ${aiResult.reference}!` });
+        }
+      } finally {
+        if (!cancelled) setIsProcessing(false);
+      }
+    };
+
+    runAiTurn();
+    return () => { cancelled = true; };
   }, [state.phase]);
 
   const handleNextRound = useCallback(() => {
@@ -111,6 +191,7 @@ export default function BattleArena() {
     }
     const theme = pickRandomTheme(usedThemeIds);
     setUsedThemeIds(prev => new Set([...prev, theme.id]));
+    setScoreReason('');
     dispatch({ type: 'NEXT_ROUND', theme });
   }, [state.currentRound, state.totalRounds, usedThemeIds]);
 
@@ -119,7 +200,7 @@ export default function BattleArena() {
     return <TitleScreen onStart={handleStart} />;
   }
 
-  // Theme reveal (initial)
+  // Theme reveal
   if (state.phase === 'theme-reveal' && state.theme) {
     return (
       <ThemeReveal
@@ -146,7 +227,6 @@ export default function BattleArena() {
   // Main battle view
   return (
     <div className="flex-1 flex flex-col items-center gap-4 p-4 max-w-4xl mx-auto w-full">
-      {/* Score board */}
       <ScoreBoard
         playerScore={state.playerScore}
         aiScore={state.aiScore}
@@ -154,7 +234,6 @@ export default function BattleArena() {
         totalRounds={state.totalRounds}
       />
 
-      {/* Theme */}
       {state.theme && (
         <div className="text-center">
           <p className="text-xs text-gold uppercase tracking-widest">Topic</p>
@@ -181,10 +260,21 @@ export default function BattleArena() {
         )}
       </div>
 
-      {/* AI thinking indicator */}
-      {isAiThinking && (
+      {/* Processing / AI thinking indicator */}
+      {isProcessing && (
         <div className="text-parchment-dark text-center animate-pulse">
-          <p className="text-lg">AI Pastor is searching the scriptures...</p>
+          <p className="text-lg">
+            {state.phase === 'ai-turn'
+              ? 'AI Pastor is searching the scriptures...'
+              : 'The judge is evaluating your verse...'}
+          </p>
+        </div>
+      )}
+
+      {/* Score reason */}
+      {scoreReason && currentRound?.playerVerse && !isProcessing && state.phase !== 'player-turn' && (
+        <div className="text-center text-sm text-parchment-dark">
+          <span className="text-gold">Judge says:</span> {scoreReason}
         </div>
       )}
 
@@ -193,14 +283,13 @@ export default function BattleArena() {
         <Commentary lines={currentRound.commentary} />
       )}
 
-      {/* Player input */}
+      {/* Player verse choices */}
       {state.phase === 'player-turn' && (
-        <div className="w-full flex flex-col items-center gap-2">
-          <p className="text-gold text-sm uppercase tracking-widest font-bold">
-            Your Turn — Cite a Verse
-          </p>
-          <VerseInput onSubmit={handlePlayerSubmit} disabled={false} />
-        </div>
+        <VerseChoices
+          choices={verseChoices}
+          onSelect={handlePlayerSelect}
+          disabled={isProcessing}
+        />
       )}
 
       {/* Round result / next */}
