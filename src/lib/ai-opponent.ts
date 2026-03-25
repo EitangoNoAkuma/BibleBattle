@@ -41,7 +41,8 @@ function getScoredVerses(theme: Theme): ScoredVerse[] {
 }
 
 /**
- * AI selects a verse based on difficulty and theme.
+ * AI selects a verse for the given theme.
+ * Picks from the top 20-60% range for a balanced challenge.
  */
 export function aiSelectVerse(
   theme: Theme,
@@ -54,29 +55,10 @@ export function aiSelectVerse(
   const available = scored.filter(sv => !gameState.usedVerseIds.has(sv.verse.id));
   if (available.length === 0) return null;
 
-  let pickIndex: number;
-
-  switch (gameState.difficulty) {
-    case 'easy': {
-      // Pick from top 60-100% range (weaker verses)
-      const start = Math.floor(available.length * 0.6);
-      pickIndex = start + Math.floor(Math.random() * (available.length - start));
-      break;
-    }
-    case 'normal': {
-      // Pick from top 20-60% range
-      const start = Math.floor(available.length * 0.2);
-      const end = Math.floor(available.length * 0.6);
-      pickIndex = start + Math.floor(Math.random() * (end - start));
-      break;
-    }
-    case 'hard': {
-      // Pick from top 10 with slight randomness
-      pickIndex = Math.floor(Math.random() * Math.min(10, available.length));
-      break;
-    }
-  }
-
+  // Pick from top 20-60% range for a balanced challenge
+  const start = Math.floor(available.length * 0.2);
+  const end = Math.floor(available.length * 0.6);
+  let pickIndex = start + Math.floor(Math.random() * (end - start));
   pickIndex = Math.min(pickIndex, available.length - 1);
   const pick = available[pickIndex];
 

@@ -3,13 +3,12 @@ import type { GameState, GameAction } from './types';
 export const initialGameState: GameState = {
   phase: 'title',
   currentRound: 0,
-  totalRounds: 5,
+  totalRounds: 3,
   theme: null,
   playerScore: 0,
   aiScore: 0,
   rounds: [],
   usedVerseIds: new Set(),
-  difficulty: 'normal',
 };
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
@@ -18,7 +17,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...initialGameState,
         phase: 'theme-reveal',
-        difficulty: action.difficulty,
       };
 
     case 'REVEAL_THEME':

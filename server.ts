@@ -8,7 +8,7 @@ app.use(express.json());
 
 const client = new Anthropic();
 
-// LLM-based scoring: rate how relevant a verse is to a debate topic
+// LLM-based scoring: referee rates how relevant a verse is to a debate topic
 app.post('/api/score', async (req, res) => {
   try {
     const { verseText, verseReference, themeName, themeDescription } = req.body;
@@ -18,9 +18,9 @@ app.post('/api/score', async (req, res) => {
       max_tokens: 300,
       messages: [{
         role: 'user',
-        content: `You are a Bible debate judge. Score how relevant this Bible verse is to the given debate topic.
+        content: `You are a referee in a Bible verse debate battle. Score how relevant this Bible verse is to the given debate topic.
 
-Topic: "${themeName}" — ${themeDescription}
+Topic: ${themeDescription}
 Verse: ${verseReference} — "${verseText}"
 
 Rate the relevance from 0 to 100:
@@ -50,7 +50,7 @@ Respond with ONLY a JSON object in this exact format:
   }
 });
 
-// LLM-based commentary: generate exciting play-by-play
+// LLM-based commentary: two reporters (Mike & Dave) have a conversation
 app.post('/api/commentary', async (req, res) => {
   try {
     const {
@@ -78,20 +78,22 @@ app.post('/api/commentary', async (req, res) => {
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 250,
+      max_tokens: 300,
       messages: [{
         role: 'user',
-        content: `You are an enthusiastic sports commentator for a Bible verse debate battle. Generate exciting play-by-play commentary.
+        content: `You are writing dialogue for two sports commentators — Mike and Dave — who are providing live commentary for a Bible verse debate battle. Mike is the excitable play-by-play announcer. Dave is the insightful color commentator who adds analysis.
 
 ${roundContext}
-Topic: "${themeName}" — ${themeDescription}
+Topic: "${themeDescription}"
 ${player} just played: ${verseReference} — "${verseText}"
-This verse scored ${score}/100 points. Reason: ${scoreReason}
+The referee scored this verse ${score}/100 points. Reason: ${scoreReason}
 ${situationContext}
 
-Write 1-2 SHORT, punchy commentary lines (like a sports announcer). Be dramatic and entertaining. Reference the specific verse and how it connects (or doesn't) to the topic. If the score is low, be humorously sympathetic. If high, be excited.
+Write exactly 2 lines of dialogue — first Mike, then Dave responding. Keep each line SHORT and punchy (1-2 sentences max). Mike should be dramatic/excited. Dave should add analytical insight about why the verse does or doesn't connect to the topic. If the score is low, Mike can be humorously shocked and Dave can gently explain why it missed. If high, both should be impressed.
 
-Respond with ONLY a JSON array of strings: ["line1", "line2"]`,
+Do NOT include speaker names in the lines — just the dialogue text.
+
+Respond with ONLY a JSON array of exactly 2 strings: ["Mike's line", "Dave's line"]`,
       }],
     });
 
@@ -99,13 +101,13 @@ Respond with ONLY a JSON array of strings: ["line1", "line2"]`,
     const match = text.match(/\[[\s\S]*\]/);
     if (match) {
       const lines = JSON.parse(match[0]);
-      res.json({ lines });
+      res.json({ lines: lines.slice(0, 2) });
     } else {
-      res.json({ lines: [`${player} plays ${verseReference}!`] });
+      res.json({ lines: [`${player} plays ${verseReference}!`, `Interesting choice for this topic.`] });
     }
   } catch (error) {
     console.error('Commentary error:', error);
-    res.json({ lines: ['The commentator seems speechless...'] });
+    res.json({ lines: ['Something is happening down there...', 'We seem to have lost our feed for a moment.'] });
   }
 });
 

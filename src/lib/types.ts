@@ -46,11 +46,10 @@ export interface GameState {
   aiScore: number;
   rounds: RoundState[];
   usedVerseIds: Set<string>;
-  difficulty: 'easy' | 'normal' | 'hard';
 }
 
 export type GameAction =
-  | { type: 'START_GAME'; difficulty: GameState['difficulty'] }
+  | { type: 'START_GAME' }
   | { type: 'REVEAL_THEME'; theme: Theme }
   | { type: 'PLAYER_SUBMIT'; verse: PlayedVerse }
   | { type: 'AI_SUBMIT'; verse: PlayedVerse }

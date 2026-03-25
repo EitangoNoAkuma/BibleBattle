@@ -1,5 +1,5 @@
-import { useReducer, useCallback, useEffect, useState, useMemo } from 'react';
-import type { GameState, PlayedVerse } from '../lib/types';
+import { useReducer, useCallback, useEffect, useState } from 'react';
+import type { PlayedVerse } from '../lib/types';
 import { gameReducer, initialGameState } from '../lib/gameReducer';
 import { aiSelectVerse } from '../lib/ai-opponent';
 import { themes } from '../data/themes';
@@ -7,7 +7,6 @@ import { generateVerseChoices } from '../lib/verse-choices';
 import type { VerseChoice } from '../lib/verse-choices';
 import { fetchLLMScore, fetchLLMCommentary } from '../lib/api';
 import TitleScreen from './TitleScreen';
-import ThemeReveal from './ThemeReveal';
 import ScoreBoard from './ScoreBoard';
 import VerseChoices from './VerseChoices';
 import VerseCard from './VerseCard';
@@ -37,8 +36,8 @@ export default function BattleArena() {
     }
   }, [state.phase, state.theme, state.currentRound]);
 
-  const handleStart = useCallback((difficulty: GameState['difficulty']) => {
-    dispatch({ type: 'START_GAME', difficulty });
+  const handleStart = useCallback(() => {
+    dispatch({ type: 'START_GAME' });
     const theme = pickRandomTheme(new Set());
     setUsedThemeIds(new Set([theme.id]));
     dispatch({ type: 'REVEAL_THEME', theme });
@@ -49,7 +48,6 @@ export default function BattleArena() {
     setIsProcessing(true);
 
     try {
-      // LLM scoring
       const scoreResult = await fetchLLMScore(
         choice.verse.t,
         choice.reference,
@@ -68,7 +66,6 @@ export default function BattleArena() {
 
       dispatch({ type: 'PLAYER_SUBMIT', verse: played });
 
-      // LLM commentary
       const commentaryResult = await fetchLLMCommentary({
         player: 'Player',
         verseReference: choice.reference,
@@ -89,7 +86,6 @@ export default function BattleArena() {
       );
     } catch (err) {
       console.error('Player turn error:', err);
-      // Fallback: use keyword score
       const played: PlayedVerse = {
         verse: choice.verse,
         bookName: choice.bookName,
@@ -98,12 +94,13 @@ export default function BattleArena() {
       };
       dispatch({ type: 'PLAYER_SUBMIT', verse: played });
       dispatch({ type: 'ADD_COMMENTARY', text: `Player cites ${choice.reference}!` });
+      dispatch({ type: 'ADD_COMMENTARY', text: `Let's see how that connects to the topic.` });
     } finally {
       setIsProcessing(false);
     }
   }, [state.theme, state.playerScore, state.aiScore, state.currentRound, state.totalRounds, isProcessing]);
 
-  // AI turn — select verse, then LLM score + commentary
+  // AI turn
   useEffect(() => {
     if (state.phase !== 'ai-turn' || !state.theme) return;
 
@@ -111,7 +108,6 @@ export default function BattleArena() {
     setIsProcessing(true);
 
     const runAiTurn = async () => {
-      // Small delay for drama
       await new Promise(r => setTimeout(r, 1000));
       if (cancelled) return;
 
@@ -122,7 +118,6 @@ export default function BattleArena() {
       }
 
       try {
-        // LLM scoring for AI's verse too
         const scoreResult = await fetchLLMScore(
           aiResult.verse.t,
           aiResult.reference,
@@ -141,7 +136,6 @@ export default function BattleArena() {
 
         dispatch({ type: 'AI_SUBMIT', verse: played });
 
-        // LLM commentary
         const commentaryResult = await fetchLLMCommentary({
           player: 'AI Pastor',
           verseReference: aiResult.reference,
@@ -165,7 +159,6 @@ export default function BattleArena() {
       } catch (err) {
         console.error('AI turn error:', err);
         if (!cancelled) {
-          // Fallback: use keyword score
           const played: PlayedVerse = {
             verse: aiResult.verse,
             bookName: aiResult.bookName,
@@ -174,6 +167,7 @@ export default function BattleArena() {
           };
           dispatch({ type: 'AI_SUBMIT', verse: played });
           dispatch({ type: 'ADD_COMMENTARY', text: `AI Pastor responds with ${aiResult.reference}!` });
+          dispatch({ type: 'ADD_COMMENTARY', text: `A bold counter-move indeed.` });
         }
       } finally {
         if (!cancelled) setIsProcessing(false);
@@ -200,18 +194,6 @@ export default function BattleArena() {
     return <TitleScreen onStart={handleStart} />;
   }
 
-  // Theme reveal
-  if (state.phase === 'theme-reveal' && state.theme) {
-    return (
-      <ThemeReveal
-        theme={state.theme}
-        round={state.currentRound}
-        totalRounds={state.totalRounds}
-        onContinue={() => {}}
-      />
-    );
-  }
-
   // Final result
   if (state.phase === 'final-result') {
     return (
@@ -234,11 +216,13 @@ export default function BattleArena() {
         totalRounds={state.totalRounds}
       />
 
+      {/* Topic — description only */}
       {state.theme && (
         <div className="text-center">
-          <p className="text-xs text-gold uppercase tracking-widest">Topic</p>
-          <h2 className="text-2xl font-bold text-parchment">{state.theme.name}</h2>
-          <p className="text-sm text-parchment-dark italic">"{state.theme.description}"</p>
+          <p className="text-xs text-wine uppercase tracking-widest mb-1">Topic</p>
+          <p className="text-xl text-ink italic max-w-lg">
+            "{state.theme.description}"
+          </p>
         </div>
       )}
 
@@ -262,19 +246,19 @@ export default function BattleArena() {
 
       {/* Processing / AI thinking indicator */}
       {isProcessing && (
-        <div className="text-parchment-dark text-center animate-pulse">
+        <div className="text-ink-faint text-center animate-pulse">
           <p className="text-lg">
             {state.phase === 'ai-turn'
               ? 'AI Pastor is searching the scriptures...'
-              : 'The judge is evaluating your verse...'}
+              : 'The referee is evaluating your verse...'}
           </p>
         </div>
       )}
 
-      {/* Score reason */}
+      {/* Score reason from referee */}
       {scoreReason && currentRound?.playerVerse && !isProcessing && state.phase !== 'player-turn' && (
-        <div className="text-center text-sm text-parchment-dark">
-          <span className="text-gold">Judge says:</span> {scoreReason}
+        <div className="text-center text-sm text-ink-light">
+          <span className="text-wine font-semibold">Referee:</span> {scoreReason}
         </div>
       )}
 
@@ -295,19 +279,19 @@ export default function BattleArena() {
       {/* Round result / next */}
       {state.phase === 'round-result' && (
         <div className="text-center">
-          <h3 className="text-xl font-bold text-gold mb-4">
+          <h3 className="text-xl font-bold text-wine mb-4">
             Round {state.currentRound} Complete!
           </h3>
           {currentRound && currentRound.playerVerse && currentRound.aiVerse && (
-            <p className="text-parchment-dark mb-4">
-              You scored <span className="text-gold font-bold">{currentRound.playerVerse.score}</span>
+            <p className="text-ink-light mb-4">
+              You scored <span className="text-wine font-bold">{currentRound.playerVerse.score}</span>
               {' vs '}
-              AI Pastor's <span className="text-gold font-bold">{currentRound.aiVerse.score}</span>
+              AI Pastor's <span className="text-wine font-bold">{currentRound.aiVerse.score}</span>
             </p>
           )}
           <button
             onClick={handleNextRound}
-            className="px-8 py-3 bg-gold-dark hover:bg-gold text-ink font-bold rounded-lg text-lg transition-colors cursor-pointer"
+            className="px-8 py-3 bg-wine hover:bg-wine-dark text-cream font-bold rounded-lg text-lg transition-colors cursor-pointer"
           >
             {state.currentRound >= state.totalRounds ? 'See Final Results' : 'Next Round'}
           </button>
