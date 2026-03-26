@@ -13,15 +13,16 @@ export default function VerseChoices({ choices, onSelect, disabled }: Props) {
 
   return (
     <div className="w-full max-w-3xl space-y-3">
-      <p className="text-center text-wine text-sm uppercase tracking-widest font-bold mb-2">
-        Choose Your Verse
+      <p className="text-center text-wine text-sm uppercase tracking-widest font-bold mb-2 animate-fade-in">
+        📜 Choose Your Verse
       </p>
       {choices.map((choice, i) => (
         <button
           key={choice.verse.id}
           onClick={() => onSelect(choice)}
           disabled={disabled}
-          className="w-full text-left p-4 bg-cream-light border-2 border-wine/15 hover:border-wine/50 hover:bg-cream-dark/20 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group"
+          className="w-full text-left p-4 bg-cream-light border-2 border-wine/15 hover:border-wine/50 hover:bg-cream-dark/20 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group animate-fade-in-up"
+          style={{ animationDelay: `${i * 0.1}s` }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
@@ -33,7 +34,7 @@ export default function VerseChoices({ choices, onSelect, disabled }: Props) {
                   {choice.reference}
                 </span>
               </div>
-              <p className="text-ink-light italic text-sm leading-relaxed line-clamp-3 group-hover:text-ink transition-colors">
+              <p className="text-ink-light text-sm leading-relaxed line-clamp-3 group-hover:text-ink transition-colors">
                 "{choice.verse.t}"
               </p>
             </div>

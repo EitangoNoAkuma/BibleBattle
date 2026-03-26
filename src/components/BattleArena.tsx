@@ -225,9 +225,9 @@ export default function BattleArena() {
 
       {/* Topic — description only */}
       {state.theme && (
-        <div className="text-center">
-          <p className="text-xs text-wine uppercase tracking-widest mb-1">Topic</p>
-          <p className="text-xl text-ink italic max-w-lg">
+        <div className="text-center animate-fade-in">
+          <p className="text-xs text-wine uppercase tracking-widest mb-1">🏷️ Topic</p>
+          <p className="text-xl text-ink whitespace-nowrap">
             "{state.theme.description}"
           </p>
         </div>
@@ -254,18 +254,18 @@ export default function BattleArena() {
       {/* Processing / AI thinking indicator */}
       {isProcessing && (
         <div className="text-ink-faint text-center animate-pulse">
-          <p className="text-lg">
+          <p className="text-lg animate-shimmer">
             {state.phase === 'ai-turn'
-              ? 'AI Pastor is searching the scriptures...'
-              : 'The referee is evaluating your verse...'}
+              ? '⛪ AI Pastor is searching the scriptures...'
+              : '🏁 The referee is evaluating your verse...'}
           </p>
         </div>
       )}
 
       {/* Score reason from referee */}
       {scoreReason && currentRound?.playerVerse && !isProcessing && state.phase !== 'player-turn' && (
-        <div className="text-center text-sm text-ink-light">
-          <span className="text-wine font-semibold">Referee:</span> {scoreReason}
+        <div className="text-center text-sm text-ink-light animate-fade-in">
+          <span className="text-wine font-semibold">🏁 Referee:</span> {scoreReason}
         </div>
       )}
 
@@ -285,9 +285,9 @@ export default function BattleArena() {
 
       {/* Round result / next */}
       {state.phase === 'round-result' && (
-        <div className="text-center">
+        <div className="text-center animate-fade-in-up">
           <h3 className="text-xl font-bold text-wine mb-4">
-            Round {state.currentRound} Complete!
+            ✅ Round {state.currentRound} Complete!
           </h3>
           {currentRound && currentRound.playerVerse && currentRound.aiVerse && (
             <p className="text-ink-light mb-4">

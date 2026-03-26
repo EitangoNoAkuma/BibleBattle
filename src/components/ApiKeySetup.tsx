@@ -14,8 +14,8 @@ export default function ApiKeySetup({ onReady }: Props) {
   if (existingKey) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-cream">
-        <h1 className="text-4xl font-bold text-wine mb-4">BIBLE BATTLE</h1>
-        <p className="text-ink-light mb-6">API key is saved and ready.</p>
+        <h1 className="text-4xl font-bold text-wine mb-4 animate-fade-in">⚔️ BIBLE BATTLE</h1>
+        <p className="text-ink-light mb-6 animate-fade-in">✅ API key is saved and ready.</p>
         <button
           onClick={onReady}
           className="px-10 py-4 bg-wine hover:bg-wine-dark text-cream rounded-lg text-xl font-bold transition-colors cursor-pointer"
@@ -49,9 +49,9 @@ export default function ApiKeySetup({ onReady }: Props) {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-cream">
-      <h1 className="text-4xl font-bold text-wine mb-2">BIBLE BATTLE</h1>
-      <p className="text-ink-light mb-8 max-w-md">
-        Enter your Anthropic API key to power the AI referee and commentary.
+      <h1 className="text-4xl font-bold text-wine mb-2 animate-fade-in">⚔️ BIBLE BATTLE</h1>
+      <p className="text-ink-light mb-8 max-w-md animate-fade-in" style={{ animationDelay: '0.2s' }}>
+        🔑 Enter your Anthropic API key to power the AI referee and commentary.
         Your key is stored locally in your browser — never sent to any server.
       </p>
 
