@@ -5,7 +5,8 @@ import { aiSelectVerse } from '../lib/ai-opponent';
 import { themes } from '../data/themes';
 import { generateVerseChoices } from '../lib/verse-choices';
 import type { VerseChoice } from '../lib/verse-choices';
-import { fetchLLMScore, fetchLLMCommentary } from '../lib/api';
+import { fetchLLMScore, fetchLLMCommentary, getApiKey } from '../lib/api';
+import ApiKeySetup from './ApiKeySetup';
 import TitleScreen from './TitleScreen';
 import ScoreBoard from './ScoreBoard';
 import VerseChoices from './VerseChoices';
@@ -20,6 +21,7 @@ function pickRandomTheme(usedThemeIds: Set<string>) {
 }
 
 export default function BattleArena() {
+  const [hasApiKey, setHasApiKey] = useState(!!getApiKey());
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [usedThemeIds, setUsedThemeIds] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
@@ -188,6 +190,11 @@ export default function BattleArena() {
     setScoreReason('');
     dispatch({ type: 'NEXT_ROUND', theme });
   }, [state.currentRound, state.totalRounds, usedThemeIds]);
+
+  // API key setup
+  if (!hasApiKey) {
+    return <ApiKeySetup onReady={() => setHasApiKey(true)} />;
+  }
 
   // Title screen
   if (state.phase === 'title') {
